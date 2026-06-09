@@ -1,0 +1,64 @@
+# =========================================================================
+# 1. DATA & LARGE ML ARTIFACTS (Crucial for Data Science)
+# =========================================================================
+# Ignore all CSV, Excel, and JSON data files to protect privacy and storage
+*.csv
+*.xlsx
+*.xls
+*.json
+data/
+datasets/
+
+# Ignore heavy deep learning model weights, checkpoints, and pickles
+*.pth
+*.bin
+*.pkl
+*.model
+*.h5
+model_checkpoints/
+checkpoints/
+
+# =========================================================================
+# 2. PYTHON ENVIRONMENT & CACHE
+# =========================================================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Local virtual environments
+venv/
+.venv/
+env/
+ENV/
+dist/
+build/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# =========================================================================
+# 3. SECRETS & CONFIGURATIONS
+# =========================================================================
+# Environment variables containing private API keys or passwords
+.env
+*.local
+
+# =========================================================================
+# 4. OS & IDE SPECIFIC FILES
+# =========================================================================
+# MacOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+
+# IDE configurations (VS Code, PyCharm)
+.vscode/
+.idea/
+*.suo
+*.ntvs*
