@@ -1,5 +1,5 @@
 # Automated Essay Scoring (AES) System for IELTS Writing
-### 🏆 1st Place Solution – PTNK AI Challenge (PAIC 2025)
+### 🏆 1st Place Solution (Team Mango) – PTNK AI Challenge (PAIC 2026)
 
 An advanced, end-to-end Machine Learning pipeline designed to objectively score IELTS writing tasks (Task 1 and Task 2) on the official 1.0 - 9.0 band scale. 
 
@@ -59,18 +59,18 @@ The tabular matrix (original features + engineered interactions + NLP OOF predic
 
 1. **Clone the repository:**
 ```bash
-   git clone [https://github.com/s4dz/ielts-essay-scoring-paic2025.git](https://github.com/s4dz/ielts-essay-scoring-paic2025.git)
-   cd ielts-essay-scoring-paic2025
+git clone https://github.com/s4dz/ielts-essay-scoring-paic2025.git
+cd ielts-essay-scoring-paic2025
 ```
 
 2. **Install dependencies:**
 ```bash
-   pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 3. **Run Inference on Sample Data:**
 ```bash
-   python main.py --mode predict --input data/sample_essays.csv
+python main.py --mode predict --input data/sample_essays.csv
 ```
 
-Developed by Khoa Phan as part of the PAIC 2025 Competition.
+Part of Team Mango's winning entry at PAIC 2026 (January 2026). Repository maintained by Khoa Phan.
