@@ -80,8 +80,20 @@ pip install -r requirements.txt
 Then change the `/kaggle/...` paths at the top of each cell to your local paths.
 
 ## ⚠️ Limitations
-* This repository does not include the DeBERTa fine-tuning code, the trained weights or the competition data. Only inference with existing weights and the tabular stages can be reproduced from it.
+* This repository does not include the training run that produced the final DeBERTa weights, the weights themselves or the competition data. Only inference with existing weights and the tabular stages can be reproduced from it. An earlier training notebook is included; see below.
 * The MAE above is measured before the final rounding to half bands.
+
+## 🧪 Development notebook
+
+`notebooks/deberta_training_dev.ipynb` is Khoa's DeBERTa training notebook from before the final run (Kaggle notebook `IELTSv2`, version 9, run completed 12 January 2026). It trains `deberta-v3-large` with attention pooling and the same 16-threshold ordinal target, plus:
+* an auxiliary regression head, trained jointly (BCE on the 16 thresholds + 0.5 × MSE on the band);
+* layer-wise learning-rate decay (0.9 per layer, 5× learning rate on the heads);
+* adversarial weight perturbation (AWP) from the third epoch;
+* a best-checkpoint per fold, selected on validation MAE.
+
+On 5-fold CV over the public training set, the best validation MAE per fold was 0.51–0.53 (before rounding). The `Final CV MAE: 1.4949` printed at the end is a bug, explained at the top of the notebook.
+
+This notebook did **not** produce the weights used in `PAIC2025.ipynb`. Those weights load into a model with a single 16-output head (`fc`), whereas this notebook has two heads (`fc_ordinal`, `fc_reg`). It also trains on `public_train.csv` only.
 
 ---
 
