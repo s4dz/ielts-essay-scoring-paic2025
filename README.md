@@ -13,7 +13,7 @@ The system is a hybrid. A fine-tuned `DeBERTa-v3-large` model reads the prompt a
 
 ## 🧠 Pipeline
 
-The competition pipeline lives in `notebooks/PAIC2025.ipynb`. Its four code cells run in order on Kaggle with a GPU. All stages share the same 5-fold `StratifiedKFold` split (seed 42, stratified by band), so every out-of-fold prediction lines up across stages.
+The competition pipeline lives in `notebooks/PAIC2025.ipynb`, the exact notebook used during PAIC 2026. `src/` and `main.py` were split out of it after the competition. The notebook's four code cells run in order on Kaggle with a GPU. All stages share the same 5-fold `StratifiedKFold` split (seed 42, stratified by band), so every out-of-fold prediction lines up across stages.
 
 ### Stage 1: DeBERTa ordinal model (cell 1)
 * **Input text:** `PROMPT: … [SEP] ESSAY: …`. For Task 1 the chart's image description is inserted as `IMAGE: …` between the two. Texts are truncated to 640 tokens.
