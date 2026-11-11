@@ -1,76 +1,88 @@
 # Automated Essay Scoring (AES) System for IELTS Writing
 ### 🏆 1st Place Solution (Team Mango) – PTNK AI Challenge (PAIC 2026)
 
-An advanced, end-to-end Machine Learning pipeline designed to objectively score IELTS writing tasks (Task 1 and Task 2) on the official 1.0 - 9.0 band scale. 
+An end-to-end machine-learning pipeline that scores IELTS Writing Task 1 and Task 2 essays on the official band scale, up to 9.0, in half-band steps.
 
-This system utilizes a hybrid architecture: leveraging a fine-tuned Deep Learning Transformer (`DeBERTa-v3-large`) for semantic representation, paired with a robust ensemble of Gradient Boosted Decision Trees (XGBoost, LightGBM, CatBoost) trained on over 35+ engineered linguistic features.
+The system is a hybrid. A fine-tuned `DeBERTa-v3-large` model reads the prompt and the essay and predicts a band. That prediction, together with 22 hand-engineered linguistic features and their interactions, goes into an ensemble of gradient-boosted trees (XGBoost, LightGBM, CatBoost).
 
-## 📊 Performance Summary
-* **Primary Metric:** Mean Absolute Error (MAE)
-* **Local 5-Fold CV MAE:** `0.4150`
-* **Official IELTS Half-Band Mapping:** Implemented via custom clipping and rounding logic.
-
----
-
-## 🧠 System Architecture & Methodology
-
-The solution is engineered as a 5-stage sequential pipeline:
-
-### Stage 1: Data Preparation & Linguistic Feature Engineering
-Extracts **35+ distinct linguistic, structural, and stylistic attributes** from raw text:
-* **Readability Statistics:** Flesch Reading Ease, Gunning Fog, and SMOG indices; sentence/word length profiles.
-* **Vocabulary Richness:** Type-Token Ratio (TTR) and long-word (>6 chars) density.
-* **Error Heuristics (Grammar Proxies):** Detection of mechanics errors (irregular spacing, punctuation anomalies, uncapitalized sentence starters).
-* **Prompt Relevance:** Semantic overlap calculation between the essay and the writing prompt after stopword filtration.
-
-### Stage 2: Deep Learning NLP Core (DeBERTa)
-* **Base Model:** `microsoft/deberta-v3-large` fine-tuned on the raw essay text.
-* **Head:** Custom **Attention Pooling layer** over the final hidden states to compress sequence length dynamically, feeding into a linear regression layer.
-* **Ordinal Regression:** Modeled as a 16-logit classification problem with a sigmoid activation function. Continuous scores are aggregated via:
-  $$Score = 1.0 + \left(\sum P(\text{class}) \times 0.5\right)$$
-* **Validation:** 5-Fold Stratified K-Fold setup. Out-Of-Fold (OOF) predictions are saved as a meta-feature (`deberta_pred`).
-
-### Stage 3: Advanced Tabular Feature Generation
-To model non-linear interactions explicitly, **11 "Golden Features"** (including `deberta_pred` and key readability metrics) are transformed via:
-* **Squared Terms:** $X^2$
-* **Pairwise Interactions:** $A \times B$
-* **Pairwise Ratios:** $A / (B + 1e-6)$ to discover composite metrics (e.g., error-to-length ratios). All infinite/NaN values are strictly sanitized to zero.
-
-### Stage 4: Meta-Feature Generation via Bagging
-* To prevent overfitting and capture discrete score class tendencies, a **LightGBM Multi-class Classifier** is introduced.
-* Modeled across 3 distinct random seeds over 5 folds (Bagging).
-* The resulting probability distributions are transformed back into a continuous expected score using a dot product, outputting the `lgb_cls_pred` feature.
-
-### Stage 5: Final Ensemble & Weight Optimization
-The tabular matrix (original features + engineered interactions + NLP OOF predictions + Bagging meta-features) is passed to three optimized regressors: **XGBoost, LightGBM, and CatBoost**.
-* **Ensemble Blending:** Instead of uniform averaging, **SciPy's `minimize` API (SLSQP algorithm)** optimizes the blending weights to target minimum absolute error directly.
-* **Post-Processing:** Predictions are clipped to $[1.0, 9.0]$, multiplied by 2, rounded to the nearest integer, and divided by 2 to align with standard IELTS half-band conventions.
+## 📊 Performance
+* **Metric:** Mean Absolute Error (MAE)
+* **Local 5-fold CV MAE:** `0.4150`. This is the out-of-fold MAE of the weighted ensemble, measured before half-band rounding.
 
 ---
 
-## 📂 Repository Layout
-* `src/features.py`: Linguistic feature extraction and mathematical interaction generators.
-* `src/models_nlp.py`: PyTorch implementation of DeBERTa-v3 with Attention Pooling and ordinal regression loss.
-* `src/models_tabular.py`: GBDT implementations (XGBoost, LightGBM, CatBoost) and bagging wrappers.
-* `src/utils.py`: Post-processing, formatting scales, and SciPy optimization routines.
-* `main.py`: The wrapper script to run training or inference locally.
+## 🧠 Pipeline
 
-## 🛠️ Installation & Usage
+The competition pipeline lives in `notebooks/PAIC2025.ipynb`. Its four code cells run in order on Kaggle with a GPU. All stages share the same 5-fold `StratifiedKFold` split (seed 42, stratified by band), so every out-of-fold prediction lines up across stages.
 
-1. **Clone the repository:**
+### Stage 1: DeBERTa ordinal model (cell 1)
+* **Input text:** `PROMPT: … [SEP] ESSAY: …`. For Task 1 the chart's image description is inserted as `IMAGE: …` between the two. Texts are truncated to 640 tokens.
+* **Architecture:** `microsoft/deberta-v3-large`, followed by attention pooling over the last hidden states, followed by a linear head with **16 outputs**.
+* **Ordinal decoding:** the scale from 1.0 to 9.0 in half-band steps has 17 bands, separated by 16 thresholds. Output *k* (k = 0, …, 15) is read through a sigmoid as the probability that the essay scores above 1.0 + 0.5k. The predicted band is
+
+  $$\hat{y} = 1.0 + 0.5 \sum_{k=0}^{15} \sigma(z_k)$$
+
+  If every probability is near 0, the prediction is 1.0. If every probability is near 1, it is 1.0 + 0.5 × 16 = **9.0**. Each output is a separate binary decision, which is why the model uses a sigmoid on each output rather than a softmax across them.
+* **Out-of-fold predictions:** each of the five fold models predicts the essays it did not see in training. These predictions become the `deberta_pred` feature for the training set. Test predictions are the average of the five fold models.
+
+### Stage 2: Linguistic features (cell 1, `src/features.py`)
+There are 22 features in total:
+* **Length and structure:** characters, words, sentences, paragraphs.
+* **Punctuation:** counts of question marks, exclamation marks, semicolons and quotes.
+* **Readability:** Flesch Reading Ease, Gunning Fog, SMOG, average sentence length, number of complex (3+ syllable) words.
+* **Vocabulary:** unique words, type-token ratio, share of words longer than 6 characters.
+* **Error proxies:** double spaces, a space before a period or comma, sentences that start with a lowercase letter, immediately repeated words.
+* **Prompt relevance:** number and share of prompt words (after removing stopwords) that appear in the essay.
+
+### Stage 3: Interaction features (cell 2, `src/features.py`)
+Eleven key features are expanded: `deberta_pred`, word / sentence / paragraph counts, average sentence length, unique words, complex words, TTR, Flesch, Gunning Fog and SMOG.
+* Squared terms: 11 features.
+* Pairwise products, A × B: 55 features.
+* Pairwise ratios in both directions, A / (B + 1e-6) and B / (A + 1e-6): 110 features.
+
+This adds 176 features. Any infinite or missing value becomes 0.
+
+### Stage 4: Bagged classifier meta-feature (cell 3)
+* A LightGBM **multiclass** classifier treats each band as its own class.
+* Each fold is trained with three seeds (42, 2024, 777), and their probabilities are averaged.
+* The expected band, Σ P(band) × band, becomes the `lgb_cls_pred` feature.
+
+### Stage 5: Final ensemble (cell 4)
+* XGBoost, LightGBM and CatBoost regressors are each trained with an MAE objective, learning rate 0.01 and early stopping after 100 rounds.
+* **Blending weights:** found with SciPy `minimize` (SLSQP) to minimize out-of-fold MAE. The weights are between 0 and 1 and sum to 1.
+* **Post-processing:** predictions are clipped to [0.5, 9.0] and rounded to the nearest half band: `round(x × 2) / 2`.
+
+---
+
+## 📂 Repository layout
+| Path | Contents |
+| :-- | :-- |
+| `notebooks/PAIC2025.ipynb` | The full competition pipeline: four cells, run on Kaggle |
+| `src/features.py` | Stage 2 and Stage 3 feature code, moved out of the notebook |
+| `src/models_nlp.py`, `src/models_tabular.py`, `src/utils.py` | **Empty for now.** The DeBERTa model, the bagging step and the weight optimization still need to be moved here from the notebook |
+| `main.py` | Single-script version of the pipeline. It imports from the three empty files above, so it **does not run yet** |
+| `data/sample_essays.csv` | A sample showing the input format |
+| `requirements.txt` | Python dependencies |
+
+## 🛠️ Reproducing the results
+1. Open `notebooks/PAIC2025.ipynb` on Kaggle with a GPU.
+2. Attach two inputs:
+   * the competition data (`public_train.csv`, `private_train.csv`, `private_test.csv`) under `/kaggle/input/ieltsdata/`;
+   * the fine-tuned DeBERTa weights for the five folds (`model_fold_{0..4}.pth`) under `/kaggle/input/large-sigma-private/`.
+3. Run the four cells in order. The last cell writes `submission_enhanced.csv`.
+
+To run locally:
 ```bash
 git clone https://github.com/s4dz/ielts-essay-scoring-paic2025.git
 cd ielts-essay-scoring-paic2025
-```
-
-2. **Install dependencies:**
-```bash
 pip install -r requirements.txt
 ```
+Then change the `/kaggle/...` paths at the top of each cell to your local paths.
 
-3. **Run Inference on Sample Data:**
-```bash
-python main.py --mode predict --input data/sample_essays.csv
-```
+## ⚠️ Limitations
+* This repository does not include the DeBERTa fine-tuning code, the trained weights or the competition data. Only inference with existing weights and the tabular stages can be reproduced from it.
+* The MAE above is measured before the final rounding to half bands.
+
+---
 
 Part of Team Mango's winning entry at PAIC 2026 (January 2026). Repository maintained by Khoa Phan.
